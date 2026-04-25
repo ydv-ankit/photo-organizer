@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}{{ collection.name }} — Photo Organizer{% endblock %}
+
+{% block content %}
+<div class="collection-header">
+  <a href="/" class="back-link">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+    All Collections
+  </a>
+  <div class="collection-title-row">
+    <div class="collection-title-wrap">
+      <h1 id="collection-name" class="collection-name" title="Click to rename">{{ collection.name }}</h1>
+      <input
+        id="rename-input"
+        class="rename-input"
+        type="text"
+        value="{{ collection.name }}"
+        maxlength="80"
+        hidden
+      >
+      <span class="rename-hint">click to rename</span>
+    </div>
+    <span class="count-badge">{{ photos|length }} photo{{ 's' if photos|length != 1 else '' }}</span>
+    <button class="btn-danger btn-sm" id="delete-collection-btn" title="Delete entire collection">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+      </svg>
+      Delete Collection
+    </button>
+  </div>
+</div>
+
+{% if photos %}
+<div class="photos-grid" id="photos-grid">
+  {% for photo in photos %}
+  <div class="photo-item" data-photo-id="{{ photo.id }}">
+    <a href="/uploads/{{ photo.stored_name }}" target="_blank" rel="noopener">
+      <img
+        src="/thumbnails/{{ photo.stored_name|replace_ext(".jpg") }}"
+        alt="{{ photo.filename }}"
+        loading="lazy"
+      >
+    </a>
+    <span class="photo-filename" title="{{ photo.filename }}">{{ photo.filename }}</span>
+    <button class="photo-delete-btn" title="Delete photo" aria-label="Delete {{ photo.filename }}">
+      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state" id="empty-state">
+  <p>No photos in this collection.</p>
+</div>
+{% endif %}
+
+<script>
+const COLLECTION_ID = {{ collection.id }};
+
+// ---- Inline rename ----
+const nameEl    = document.getElementById('collection-name');
+const inputEl   = document.getElementById('rename-input');
+
+function startRename() {
+  nameEl.hidden  = true;
+  inputEl.hidden = false;
+  inputEl.value  = nameEl.textContent.trim();
+  inputEl.focus();
+  inputEl.select();
+}
+
+async function commitRename() {
+  const newName = inputEl.value.trim();
+  if (!newName || newName === nameEl.textContent.trim()) {
+    cancelRename();
+    return;
+  }
+  const res = await fetch(`/collections/${COLLECTION_ID}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: newName }),
+  });
+  if (res.ok) {
+    const data = await res.json();
+    nameEl.textContent = data.name;
+    document.title = `${data.name} — Photo Organizer`;
+  }
+  cancelRename();
+}
+
+function cancelRename() {
+  inputEl.hidden = true;
+  nameEl.hidden  = false;
+}
+
+nameEl.addEventListener('click', startRename);
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+  if (e.key === 'Escape') cancelRename();
+});
+inputEl.addEventListener('blur', commitRename);
+
+// ---- Delete collection ----
+document.getElementById('delete-collection-btn').addEventListener('click', async () => {
+  if (!confirm(`Delete the entire collection "${nameEl.textContent.trim()}" and all its photos? This cannot be undone.`)) return;
+  const res = await fetch(`/collections/${COLLECTION_ID}`, { method: 'DELETE' });
+  if (res.ok) window.location.href = '/';
+});
+
+// ---- Delete individual photo ----
+let photoCount = document.querySelectorAll('.photo-item').length;
+
+document.getElementById('photos-grid')?.addEventListener('click', async e => {
+  const btn = e.target.closest('.photo-delete-btn');
+  if (!btn) return;
+  e.preventDefault();
+
+  const item    = btn.closest('.photo-item');
+  const photoId = item.dataset.photoId;
+  const name    = item.querySelector('.photo-filename')?.textContent || 'this photo';
+
+  if (!confirm(`Delete "${name}"?`)) return;
+
+  const res = await fetch(`/photos/${photoId}`, { method: 'DELETE' });
+  if (!res.ok) return;
+
+  const data = await res.json();
+  item.remove();
+  photoCount--;
+
+  // Update badge
+  const badge = document.querySelector('.count-badge');
+  if (badge) badge.textContent = `${photoCount} photo${photoCount !== 1 ? 's' : ''}`;
+
+  if (data.collection_deleted || photoCount === 0) {
+    window.location.href = '/';
+  }
+});
+</script>
+{% endblock %}

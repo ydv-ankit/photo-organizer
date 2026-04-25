@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Home — Photo Organizer{% endblock %}
+
+{% block content %}
+<section class="upload-section">
+  <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" name="file" id="file-input"
+             accept=".jpg,.jpeg,.png,.webp,.gif" hidden>
+      <div class="drop-zone__prompt">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <p>Drag &amp; drop a photo here, or <label for="file-input" class="browse-label">browse</label></p>
+        <p class="hint">JPEG, PNG, WEBP, GIF &middot; Max 20 MB</p>
+        <p class="selected-file" id="selected-file"></p>
+      </div>
+    </div>
+
+    {% if error %}
+    <p class="error-banner">{{ error }}</p>
+    {% endif %}
+
+    <button type="submit" class="btn-upload" id="submit-btn" disabled>Upload Photo</button>
+  </form>
+</section>
+
+<section class="collections-section">
+  <h2>
+    Collections
+    <span class="count-badge">{{ collections|length }}</span>
+  </h2>
+
+  {% if collections %}
+  <div class="collections-grid">
+    {% for col in collections %}
+    <div class="collection-card-wrap" data-collection-id="{{ col.id }}" data-collection-name="{{ col.name }}">
+      <a class="collection-card" href="/collections/{{ col.id }}">
+        {% if col.cover_photo %}
+        <div class="card-cover"
+             style="background-image: url('/thumbnails/{{ col.cover_photo.stored_name|replace_ext(".jpg") }}')">
+        </div>
+        {% else %}
+        <div class="card-cover card-cover--empty">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+        </div>
+        {% endif %}
+        <div class="card-info">
+          <span class="card-name">{{ col.name }}</span>
+          <span class="count-badge">{{ col.photos|length }}</span>
+        </div>
+      </a>
+      <button class="card-delete-btn" title="Delete collection" aria-label="Delete {{ col.name }}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p>No collections yet. Upload a photo to get started.</p>
+  </div>
+  {% endif %}
+</section>
+
+<script>
+const input = document.getElementById('file-input');
+const btn = document.getElementById('submit-btn');
+const zone = document.getElementById('drop-zone');
+const selectedFile = document.getElementById('selected-file');
+
+function onFileSelected(file) {
+  if (!file) return;
+  btn.disabled = false;
+  selectedFile.textContent = file.name;
+  zone.classList.add('has-file');
+}
+
+input.addEventListener('change', () => {
+  if (input.files.length) onFileSelected(input.files[0]);
+});
+
+zone.addEventListener('click', (e) => {
+  if (e.target.tagName !== 'LABEL') input.click();
+});
+
+zone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  zone.classList.add('drag-over');
+});
+
+zone.addEventListener('dragleave', (e) => {
+  if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
+});
+
+zone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  zone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    onFileSelected(file);
+    document.getElementById('upload-form').submit();
+  }
+});
+
+// ---- Delete collection from grid ----
+document.querySelector('.collections-grid')?.addEventListener('click', async e => {
+  const btn = e.target.closest('.card-delete-btn');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const wrap = btn.closest('.collection-card-wrap');
+  const id   = wrap.dataset.collectionId;
+  const name = wrap.dataset.collectionName;
+
+  if (!confirm(`Delete "${name}" and all its photos? This cannot be undone.`)) return;
+
+  const res = await fetch(`/collections/${id}`, { method: 'DELETE' });
+  if (!res.ok) return;
+
+  wrap.remove();
+
+  // Update count badge
+  const remaining = document.querySelectorAll('.collection-card-wrap').length;
+  const badge = document.querySelector('.collections-section .count-badge');
+  if (badge) badge.textContent = remaining;
+
+  if (remaining === 0) {
+    document.querySelector('.collections-grid').remove();
+    const section = document.querySelector('.collections-section');
+    section.insertAdjacentHTML('beforeend', '<div class="empty-state"><p>No collections yet. Upload a photo to get started.</p></div>');
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(update-config)",
+      "Bash(uv --version)",
+      "Bash(python3.12 --version)",
+      "Bash(rm -f /Users/ankityadav/Desktop/workspace/projects/photo-organizer/photos.db)",
+      "Bash(rm -f /Users/ankityadav/Desktop/workspace/projects/photo-organizer/uploads/*)",
+      "Bash(rm -f /Users/ankityadav/Desktop/workspace/projects/photo-organizer/thumbnails/*)",
+      "Bash(pkill -f \"uvicorn main:app\")",
+      "Bash(uv run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/)"
+    ]
+  }
+}
